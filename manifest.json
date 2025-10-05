@@ -3,7 +3,7 @@
     "manifest_version": 3,
     "name": "Alice AI",
     "version": "1.0",
-    "description": "A simple chatbot powered by Google Gemini.",
+    "description": "Your AI companion, meant to accompany you as you do your tasks.",
     "action": {
         "default_popup": "frontend.html",
         "default_icon": {

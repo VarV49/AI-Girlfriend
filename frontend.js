@@ -1,8 +1,7 @@
-const BACKEND_URL = 'http://127.0.0.1:5000/chat'; // change if your backend runs elsewhere
+const BACKEND_URL = 'http://127.0.0.1:5000/chat';
 
 const chatEl = document.getElementById('chat');
-const toneSelect = document.getElementById('toneSelect');
-const voiceSelect = document.getElementById('voiceSelect');
+const voiceSelect = document.getElementById('voiceSelect'); // Corrected from toneSelect
 const textInput = document.getElementById('textInput');
 const sendBtn = document.getElementById('sendBtn');
 const crazySlider = document.getElementById('crazySlider');
@@ -13,13 +12,11 @@ const speakRing = document.getElementById('speakRing');
 const ringCtx = speakRing.getContext('2d');
 let ringAnimationId = null;
 
-// Update crazy factor display
 crazyValue.textContent = crazySlider.value + '%';
 crazySlider.addEventListener('input', () => {
   crazyValue.textContent = crazySlider.value + '%';
 });
 
-// Add chat message
 function addMessage(text, who='them') {
   const wrapper = document.createElement('div');
   wrapper.className = 'msg' + (who==='you' ? ' you' : '');
@@ -31,7 +28,6 @@ function addMessage(text, who='them') {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-// Procedural speak ring
 function drawRing(intensity=0){
   const w = speakRing.width;
   const h = speakRing.height;
@@ -61,17 +57,15 @@ function stopRing(){
   ringCtx.clearRect(0,0,speakRing.width,speakRing.height);
 }
 
-// Backend call
-async function sendToBackend(text, voice='default', crazy=50){
+// Backend call - MODIFIED to send crazy_factor and rely on backend for persona
+async function sendToBackend(text, crazy_factor){ // crazy is now crazy_factor
   try {
     const res = await fetch(BACKEND_URL, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({
-        prompt: `You are an AI girlfriend who is deeply obsessed with the user.
-Respond in a clingy, affectionate, and over-the-top tone. Also, dont make responses longer than 70 words
-The user says: "${text}"
-You reply:`
+        prompt: text, // Send just the user's message
+        crazy_factor: crazy_factor // Send the crazy factor
       })
     });
     const data = await res.json();
@@ -79,27 +73,25 @@ You reply:`
     if(data && data.error) return { text: `Server error: ${data.error}` };
     return { text: "I couldn't generate a reply." };
   } catch(e) {
-    console.error(e);
+    console.error("Error connecting to backend or parsing response:", e);
     return { text: "Error: could not get reply from backend." };
   }
 }
 
-
-// Send message
 async function sendMessage(){
   const text = textInput.value.trim();
   if(!text) return;
   addMessage(text, 'you');
   textInput.value = '';
-  const voice = voiceSelect.value;
-  const crazy = parseInt(crazySlider.value,10);
+  const crazy = parseInt(crazySlider.value,10); // Get crazy factor here
   addMessage("Thinking...", 'them');
   try {
-    const res = await sendToBackend(text, voice, crazy);
+    // Pass the crazy factor to the backend
+    const res = await sendToBackend(text, crazy);
     addMessage(res.text, 'them');
-    speakText(res.text, voice);
+    speakText(res.text, voiceSelect.value); // Pass voiceSelect.value for preset
   } catch(e){
-    console.error(e);
+    console.error("Error in sendMessage:", e);
     addMessage("Error: failed to send message.", 'them');
   }
 }
@@ -107,45 +99,19 @@ async function sendMessage(){
 sendBtn.addEventListener('click', sendMessage);
 textInput.addEventListener('keydown', e => { if(e.key==='Enter') sendMessage(); });
 
-// Clear chat
 clearBtn.addEventListener('click', () => { chatEl.innerHTML=''; addMessage("Conversation cleared. Say hi!","them"); });
 
-// Demo
 sampleBtn.addEventListener('click', () => {
   addMessage("You: Tell me a secret.", "you");
-  setTimeout(()=>{ addMessage("I like holding hands with you when we walk.", "them"); speakText("I like holding hands with you when we walk."); },500);
+  setTimeout(()=>{ addMessage("I like holding hands with you when we walk.", "them"); speakText("I like holding hands with you when we walk.", voiceSelect.value); },500);
 });
 
-// Speech synthesis
-function speakText(text) {
-  if (!("speechSynthesis" in window)) return;
 
+function speakText(text, voicePreset){
+  if(!("speechSynthesis" in window)) return;
   const utter = new SpeechSynthesisUtterance(text);
   const voices = speechSynthesis.getVoices();
 
-  // Pick a female voice automatically
-  const femaleVoice = voices.find(v => /female|zira|samantha/i.test(v.name));
-  utter.voice = femaleVoice || voices[0]; // fallback to any voice
-
-  utter.pitch = 1.2; // sweet/playful tone
-  utter.rate = 1.0;
-
-  speechSynthesis.cancel();
-  speechSynthesis.speak(utter);
-}
-
-// Example usage
-speakText("Hi! I'm your playful AI companion.");
-
-
-  animateRing();
-  utter.onend = stopRing;
-  speechSynthesis.cancel();
-  speechSynthesis.speak(utter);
-
-
-
-  // Apply tone presets
   switch(voicePreset){
     case 'playful': utter.pitch=1.45; utter.rate=1.05; break;
     case 'flirty': utter.pitch=1.35; utter.rate=0.98; break;
@@ -154,53 +120,35 @@ speakText("Hi! I'm your playful AI companion.");
     default: utter.pitch=1.05; utter.rate=1.0;
   }
 
+  let chosenVoice = voices.find(v => v.name.includes("Google US English Female"))
+                     || voices.find(v => v.name.includes("Google UK English Female"));
 
-// Populate voice list
-function populateVoices() {
-  const voices = speechSynthesis.getVoices();
-  voiceSelect.innerHTML = "";
-  voices.forEach((v, i) => {
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = `${v.name} (${v.lang})`;
-    voiceSelect.appendChild(opt);
-  });
-}
-
-// Make sure voices load on all browsers
-speechSynthesis.onvoiceschanged = populateVoices;
-populateVoices();
-
-
-  // Load voices and pick best option
-  const voices = speechSynthesis.getVoices();
-
-  // Try to force a "female" Google voice first
-  let chosen = voices.find(v => v.name.includes("Google US English Female")) 
-             || voices.find(v => v.name.includes("Google UK English Female"));
-
-  // If not found, fallback to any voice with "Female" or "Woman" in name
-  if (!chosen) {
-    chosen = voices.find(v => /female|woman/i.test(v.name));
+  if (!chosenVoice) {
+    chosenVoice = voices.find(v => /female|woman/i.test(v.name));
   }
+  utter.voice = chosenVoice || voices[0]; 
 
-  // Fallback: first available voice
-  utter.voice = chosen || voices[0];
-
-  // Ring animation + speak
   animateRing();
   utter.onend = stopRing;
   speechSynthesis.cancel();
   speechSynthesis.speak(utter);
+}
 
+function populateVoices() {
+  const voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = ""; 
 
-speechSynthesis.onvoiceschanged = () => {
-  console.log("Available voices:");
-  speechSynthesis.getVoices().forEach(v => {
-    console.log(v.name, v.lang);
+  ['Default', 'Sweet', 'Playful', 'Flirty', 'Calm'].forEach(tone => {
+      const opt = document.createElement("option");
+      opt.value = tone.toLowerCase();
+      opt.textContent = tone;
+      voiceSelect.appendChild(opt);
   });
-};
+
+}
+
+speechSynthesis.onvoiceschanged = populateVoices;
+populateVoices();
 
 
-// Initial message
-addMessage("Hi — I'm your playful AI companion. Type or press send!", "them");
+addMessage("Hi — I'm your playfully snarky AI companion. Type or press send!", "them");
