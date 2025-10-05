@@ -1,9 +1,12 @@
+const BACKEND_URL = 'http://127.0.0.1:5000/chat'; // change if your backend runs elsewhere
+
 const chatEl = document.getElementById('chat');
+const toneSelect = document.getElementById('toneSelect');
+const voiceSelect = document.getElementById('voiceSelect');
 const textInput = document.getElementById('textInput');
 const sendBtn = document.getElementById('sendBtn');
 const crazySlider = document.getElementById('crazySlider');
 const crazyValue = document.getElementById('crazyValue');
-const voiceSelect = document.getElementById('voiceSelect');
 const clearBtn = document.getElementById('clearBtn');
 const sampleBtn = document.getElementById('sampleBtn');
 const speakRing = document.getElementById('speakRing');
@@ -46,8 +49,8 @@ function drawRing(intensity=0){
 function animateRing(){
   let t = 0;
   function loop(){
-    t += 0.05;
-    drawRing(Math.abs(Math.sin(t))*10);
+    t += 0.1;
+    drawRing(Math.abs(Math.sin(t))*3);
     ringAnimationId = requestAnimationFrame(loop);
   }
   loop();
@@ -58,29 +61,24 @@ function stopRing(){
   ringCtx.clearRect(0,0,speakRing.width,speakRing.height);
 }
 
-// Gemini API call
+// Backend call
 async function sendToBackend(text, voice='default', crazy=50){
   try {
-    const prompt = `User: ${text}\nAI (crazy factor ${crazy}):`;
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',{
+    const res = await fetch(BACKEND_URL, {
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':'Bearer AIzaSyBmpxLZOW7UD6LxcPvf4Lkb_mzqAXhaz0A' // secure on server
-      },
-      body: JSON.stringify({
-        prompt:{ text: prompt },
-        temperature: crazy/100,
-        candidateCount:1
-      })
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ prompt: `User: ${text}\nAI (crazy factor ${crazy}):` })
     });
     const data = await res.json();
-    return { text: data.candidates?.[0]?.content?.[0]?.text || "I couldn't generate a reply." };
+    if(data && data.response) return { text: data.response };
+    if(data && data.error) return { text: `Server error: ${data.error}` };
+    return { text: "I couldn't generate a reply." };
   } catch(e) {
     console.error(e);
-    return { text: "Error: could not get reply from Gemini." };
+    return { text: "Error: could not get reply from backend." };
   }
 }
+
 
 // Send message
 async function sendMessage(){
@@ -114,9 +112,35 @@ sampleBtn.addEventListener('click', () => {
 });
 
 // Speech synthesis
-function speakText(text, voicePreset){
-  if(!("speechSynthesis" in window)) return;
+function speakText(text) {
+  if (!("speechSynthesis" in window)) return;
+
   const utter = new SpeechSynthesisUtterance(text);
+  const voices = speechSynthesis.getVoices();
+
+  // Pick a female voice automatically
+  const femaleVoice = voices.find(v => /female|zira|samantha/i.test(v.name));
+  utter.voice = femaleVoice || voices[0]; // fallback to any voice
+
+  utter.pitch = 1.2; // sweet/playful tone
+  utter.rate = 1.0;
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
+}
+
+// Example usage
+speakText("Hi! I'm your playful AI companion.");
+
+
+  animateRing();
+  utter.onend = stopRing;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
+
+
+
+  // Apply tone presets
   switch(voicePreset){
     case 'playful': utter.pitch=1.45; utter.rate=1.05; break;
     case 'flirty': utter.pitch=1.35; utter.rate=0.98; break;
@@ -124,13 +148,54 @@ function speakText(text, voicePreset){
     case 'sweet': utter.pitch=1.2; utter.rate=0.98; break;
     default: utter.pitch=1.05; utter.rate=1.0;
   }
+
+
+// Populate voice list
+function populateVoices() {
   const voices = speechSynthesis.getVoices();
-  utter.voice = voices.find(v => /female|woman/i.test(v.name)) || voices[0];
+  voiceSelect.innerHTML = "";
+  voices.forEach((v, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = `${v.name} (${v.lang})`;
+    voiceSelect.appendChild(opt);
+  });
+}
+
+// Make sure voices load on all browsers
+speechSynthesis.onvoiceschanged = populateVoices;
+populateVoices();
+
+
+  // Load voices and pick best option
+  const voices = speechSynthesis.getVoices();
+
+  // Try to force a "female" Google voice first
+  let chosen = voices.find(v => v.name.includes("Google US English Female")) 
+             || voices.find(v => v.name.includes("Google UK English Female"));
+
+  // If not found, fallback to any voice with "Female" or "Woman" in name
+  if (!chosen) {
+    chosen = voices.find(v => /female|woman/i.test(v.name));
+  }
+
+  // Fallback: first available voice
+  utter.voice = chosen || voices[0];
+
+  // Ring animation + speak
   animateRing();
   utter.onend = stopRing;
   speechSynthesis.cancel();
   speechSynthesis.speak(utter);
-}
+
+
+speechSynthesis.onvoiceschanged = () => {
+  console.log("Available voices:");
+  speechSynthesis.getVoices().forEach(v => {
+    console.log(v.name, v.lang);
+  });
+};
+
 
 // Initial message
 addMessage("Hi — I'm your playful AI companion. Type or press send!", "them");
