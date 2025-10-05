@@ -1,10 +1,10 @@
 {
     "manifest_version": 3,
-    "name": "Gemini Chatbot",
+    "name": "Alice AI",
     "version": "1.0",
     "description": "A simple chatbot powered by Google Gemini.",
     "action": {
-        "default_popup": "popup.html",
+        "default_popup": "frontend.html",
         "default_icon": {
             "16": "icons/icon.png",
             "48": "icons/icon.png",
